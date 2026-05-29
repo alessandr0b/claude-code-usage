@@ -8,6 +8,7 @@ month by month, with interactive filters (3M / 6M / 12M / All):
   • Time together   — engaged time, from gaps between log events (<= idle cutoff)
   • Lines written   — code emitted via Write / Edit / MultiEdit / NotebookEdit
   • Estimated value — token cost at public API list prices (via `ccusage`)
+  • Messages        — your prompts + Claude's replies, and your favorite model
   • Tokens & active days
   • Achievements    — all-time local badges (streaks, night owl, marathons, …)
 
@@ -83,15 +84,28 @@ def _parse_dt(ts):
     return None
 
 
+def _is_real_user_prompt(msg):
+    """True for a human-typed prompt; False for synthetic tool_result turns."""
+    content = msg.get("content")
+    if isinstance(content, str):
+        return True
+    if isinstance(content, list):
+        return not any(isinstance(b, dict) and b.get("type") == "tool_result"
+                       for b in content)
+    return False
+
+
 def parse_logs(projects_dir):
-    """Walk *.jsonl transcripts. Returns (events, loc, newfiles).
+    """Walk *.jsonl transcripts. Returns (events, loc, newfiles, msgs, models).
 
     events   — sorted list of datetimes (one per log entry with a timestamp)
     loc      — {month: lines written}
     newfiles — {month: Write count}
+    msgs     — {month: messages exchanged} (your prompts + Claude's replies)
+    models   — {model: replies} all-time, for the "favorite model" stat
     """
     files = glob.glob(os.path.join(projects_dir, "**", "*.jsonl"), recursive=True)
-    events, loc, newfiles = [], {}, {}
+    events, loc, newfiles, msgs, models = [], {}, {}, {}, {}
 
     for f in files:
         try:
@@ -111,7 +125,16 @@ def parse_logs(projects_dir):
                     if dt is not None:
                         events.append(dt)
                     key = ts[:7]
-                    content = (d.get("message") or {}).get("content")
+                    msg = d.get("message") or {}
+                    t = d.get("type")
+                    if t == "assistant":
+                        msgs[key] = msgs.get(key, 0) + 1
+                        model = msg.get("model")
+                        if model and model != "<synthetic>":
+                            models[model] = models.get(model, 0) + 1
+                    elif t == "user" and _is_real_user_prompt(msg):
+                        msgs[key] = msgs.get(key, 0) + 1
+                    content = msg.get("content")
                     if not isinstance(content, list):
                         continue
                     for b in content:
@@ -135,7 +158,7 @@ def parse_logs(projects_dir):
             pass
 
     events.sort()
-    return events, loc, newfiles
+    return events, loc, newfiles, msgs, models
 
 
 def compute_stats(events, months, idle_cutoff):
@@ -246,14 +269,28 @@ def human_tokens(n):
     return str(n)
 
 
+def pretty_model(m):
+    """Turn 'claude-opus-4-7' / 'claude-haiku-4-5-20251001' into 'opus 4-7'."""
+    if not m:
+        return ""
+    m = m.replace("claude-", "")
+    for fam in ("opus", "sonnet", "haiku"):
+        if m.startswith(fam + "-"):
+            ver = m[len(fam) + 1:].split("-202", 1)[0]  # drop any -YYYYMMDD suffix
+            return f"{fam} {ver}"
+    return m
+
+
 def short_models(models):
-    out = []
-    for m in models or []:
-        m = (m.replace("claude-", "")
-              .replace("-20251001", "").replace("-20250929", "").replace("-20251101", "")
-              .replace("opus-", "opus ").replace("sonnet-", "sonnet ").replace("haiku-", "haiku "))
-        out.append(m)
-    return ", ".join(sorted(set(out)))
+    return ", ".join(sorted({pretty_model(m) for m in (models or [])}))
+
+
+def favorite_model(models):
+    """({model: replies}) -> (pretty_name, replies) for the most-used model."""
+    if not models:
+        return None, 0
+    name, n = max(models.items(), key=lambda kv: kv[1])
+    return pretty_model(name), n
 
 
 # ------------------------------------------------------------------- demo data
@@ -264,32 +301,34 @@ def demo_data():
     to any real person's account.
     """
     base = [
-        ("2025-07", 50400, 9, 9600, 720_000, 51_000_000, 41.20,
+        ("2025-07", 50400, 9, 9600, 720_000, 51_000_000, 41.20, 1_900,
          ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"]),
-        ("2025-08", 64800, 11, 14300, 980_000, 73_000_000, 58.90,
+        ("2025-08", 64800, 11, 14300, 980_000, 73_000_000, 58.90, 2_600,
          ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"]),
-        ("2025-09", 90000, 14, 21800, 1_510_000, 142_000_000, 121.40,
+        ("2025-09", 90000, 14, 21800, 1_510_000, 142_000_000, 121.40, 4_100,
          ["claude-opus-4-6", "claude-sonnet-4-6"]),
-        ("2025-10", 79200, 12, 18400, 1_240_000, 96_500_000, 78.40,
+        ("2025-10", 79200, 12, 18400, 1_240_000, 96_500_000, 78.40, 3_300,
          ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"]),
-        ("2025-11", 111600, 17, 41200, 3_820_000, 412_000_000, 305.10,
+        ("2025-11", 111600, 17, 41200, 3_820_000, 412_000_000, 305.10, 7_400,
          ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"]),
-        ("2025-12", 172800, 21, 67800, 6_150_000, 718_000_000, 612.75,
+        ("2025-12", 172800, 21, 67800, 6_150_000, 718_000_000, 612.75, 11_200,
          ["claude-opus-4-7", "claude-haiku-4-5-20251001"]),
     ]
-    cc, loc, secs, days = {}, {}, {}, {}
-    for period, sec, dy, lines, out, tok, cost, models in base:
+    cc, loc, secs, days, msgs = {}, {}, {}, {}, {}
+    for period, sec, dy, lines, out, tok, cost, ms, models in base:
         cc[period] = {"period": period, "totalTokens": tok, "outputTokens": out,
                       "cacheReadTokens": int(tok * 0.985), "totalCost": cost,
                       "modelsUsed": models}
-        loc[period], secs[period], days[period] = lines, sec, dy
+        loc[period], secs[period], days[period], msgs[period] = lines, sec, dy, ms
     total = sum(secs.values()) or 1
     extras = {
         "total_secs": total, "night_secs": total * 0.18, "morning_secs": total * 0.05,
         "weekend_secs": total * 0.30, "longest_session": 4.2 * 3600,
         "longest_streak": 9,
     }
-    return cc, loc, secs, days, extras
+    models = {"claude-opus-4-7": 18_400, "claude-sonnet-4-6": 9_200,
+              "claude-haiku-4-5-20251001": 2_700, "claude-opus-4-6": 1_200}
+    return cc, loc, secs, days, extras, msgs, models
 
 
 # ----------------------------------------------------------------- HTML helpers
@@ -305,10 +344,15 @@ def _render_badges(badges):
     return earned, len(badges), "".join(chips)
 
 
-def build_html(rows, badges, default_filter, idle_minutes, gen):
+def build_html(rows, badges, default_filter, idle_minutes, gen, fav_name, fav_n):
     """rows: list of per-month dicts sorted ascending by month."""
     earned, total_badges, badges_html = _render_badges(badges)
     data_json = json.dumps(rows, separators=(",", ":"))
+    if fav_name:
+        fav_html = (f'🏆 <strong>Favorite model</strong> — {fav_name} '
+                    f'<span class="favn">{fav_n:,} replies · all-time</span>')
+    else:
+        fav_html = '🏆 <strong>Favorite model</strong> — not enough data yet'
     repl = {
         "%%DATA%%": data_json,
         "%%BADGES%%": badges_html,
@@ -316,6 +360,7 @@ def build_html(rows, badges, default_filter, idle_minutes, gen):
         "%%DEFAULT%%": default_filter,
         "%%IDLE%%": str(idle_minutes),
         "%%GEN%%": gen,
+        "%%FAV%%": fav_html,
         "%%REPO%%": REPO,
     }
     html = _TEMPLATE
@@ -330,12 +375,15 @@ def build_wrapped(span, totals, badges):
     chips = "".join(
         f'<div class="wb"><span>{b["emoji"]}</span>{b["name"]}</div>' for b in top
     ) or '<div class="wb">🌱 Just getting started</div>'
+    fav = f'★ Favorite model · {totals["fav_model"]}' if totals.get("fav_model") else ""
     return (_WRAPPED_TEMPLATE
             .replace("%%SPAN%%", span)
+            .replace("%%FAV%%", fav)
             .replace("%%TIME%%", hm(totals["secs"]))
             .replace("%%LOC%%", f'{totals["loc"]:,}')
             .replace("%%TOK%%", human_tokens(totals["tokens"]))
             .replace("%%COST%%", f'${totals["cost"]:,.0f}')
+            .replace("%%MSGS%%", f'{totals["msgs"]:,}')
             .replace("%%DAYS%%", str(totals["days"]))
             .replace("%%CHIPS%%", chips)
             .replace("%%REPO%%", REPO))
@@ -356,12 +404,14 @@ _TEMPLATE = r"""<!DOCTYPE html>
   .chip { cursor:pointer; border:1px solid var(--line); background:var(--card); color:var(--muted); padding:7px 16px; border-radius:999px; font-size:13px; font-weight:600; user-select:none; }
   .chip:hover { border-color:#3a4150; color:var(--txt); }
   .chip.active { background:var(--accent); border-color:var(--accent); color:#fff; }
-  .cards { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:28px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:18px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
   .card .label { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.6px; }
   .card .val { font-size:22px; font-weight:650; margin-top:6px; letter-spacing:-.5px; }
-  .card .val.cost { color:var(--accent); } .card .val.time { color:var(--accent2); } .card .val.loc { color:var(--loc); }
+  .card .val.cost { color:var(--accent); } .card .val.time { color:var(--accent2); } .card .val.loc { color:var(--loc); } .card .val.msgs { color:#7fd1b9; }
   .card .hint { color:var(--muted); font-size:12px; margin-top:4px; }
+  .fav { background:linear-gradient(180deg,#241f12,var(--card)); border:1px solid #3a3320; border-radius:12px; padding:12px 16px; margin-bottom:28px; font-size:14px; color:var(--gold); }
+  .fav .favn { color:var(--muted); font-weight:400; margin-left:6px; }
   .section-title { font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin:8px 0 12px; display:flex; justify-content:space-between; }
   .section-title .count { color:var(--gold); }
   .badges { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:10px; margin-bottom:28px; }
@@ -411,14 +461,17 @@ _TEMPLATE = r"""<!DOCTYPE html>
     <div class="card"><div class="label">Lines written</div><div class="val loc" id="c_loc"></div><div class="hint">code we wrote</div></div>
     <div class="card"><div class="label">Est. value</div><div class="val cost" id="c_cost"></div><div class="hint">at API rates</div></div>
     <div class="card"><div class="label">Total tokens</div><div class="val" id="c_tok"></div><div class="hint" id="c_tok_full"></div></div>
+    <div class="card"><div class="label">Messages</div><div class="val msgs" id="c_msgs"></div><div class="hint">you + Claude</div></div>
     <div class="card"><div class="label">Active days</div><div class="val" id="c_days"></div><div class="hint">days with activity</div></div>
   </div>
+
+  <div class="fav">%%FAV%%</div>
 
   <div class="section-title"><span>Achievements (all-time)</span><span class="count">%%BADGE_COUNT%%</span></div>
   <div class="badges">%%BADGES%%</div>
 
   <div class="section-title"><span>Monthly breakdown</span></div>
-  <table><thead><tr><th>Month</th><th>Time</th><th>Days</th><th>Lines</th><th>Output</th><th>Total tokens</th><th>Est. value</th></tr></thead>
+  <table><thead><tr><th>Month</th><th>Time</th><th>Days</th><th>Msgs</th><th>Lines</th><th>Output</th><th>Total tokens</th><th>Est. value</th></tr></thead>
   <tbody id="tbody"></tbody>
   <tfoot id="tfoot"></tfoot></table>
 
@@ -428,11 +481,11 @@ _TEMPLATE = r"""<!DOCTYPE html>
     <div class="panel"><div class="section-title" style="margin-top:0"><span>Est. value (USD)</span></div><div id="bars_cost"></div></div>
   </div>
 
-  <div class="note"><strong>Time together</strong> = sum of gaps ≤ %%IDLE%% min between consecutive log events (longer gaps are treated as time away); a fair lower bound on engaged time. <strong>Lines written</strong> counts content emitted via Write/Edit tools across all projects — a proxy, not a net git diff. <strong>"All"</strong> is limited by Claude Code's log retention, so older months may be missing. On a Pro/Max subscription the dollar figure is API-equivalent value, not money billed.</div>
+  <div class="note"><strong>Time together</strong> = sum of gaps ≤ %%IDLE%% min between consecutive log events (longer gaps are treated as time away); a fair lower bound on engaged time. <strong>Lines written</strong> counts content emitted via Write/Edit tools across all projects — a proxy, not a net git diff. <strong>Messages</strong> = your prompts plus Claude's replies (tool-result turns excluded); <strong>Favorite model</strong> is the model behind the most replies, all-time. <strong>"All"</strong> is limited by Claude Code's log retention, so older months may be missing. On a Pro/Max subscription the dollar figure is API-equivalent value, not money billed.</div>
   <div class="footer">Generated by <a href="https://%%REPO%%">claude-code-usage</a> · tokens &amp; cost via <code>ccusage</code> · time &amp; lines from <code>~/.claude/projects</code></div>
 </div>
 <script>
-const DATA = %%DATA%%;            // [{m,secs,days,loc,out,tok,cost,models}] ascending
+const DATA = %%DATA%%;            // [{m,secs,days,msgs,loc,out,tok,cost,models}] ascending
 let FILTER = "%%DEFAULT%%";
 const $ = id => document.getElementById(id);
 
@@ -462,21 +515,23 @@ function bars(host, rows, key, fmt, cls) {
 function render() {
   const rows = subset();
   const t = rows.reduce((a,r)=>({secs:a.secs+r.secs,loc:a.loc+r.loc,days:a.days+r.days,
-    tok:a.tok+r.tok,out:a.out+r.out,cost:a.cost+r.cost}),{secs:0,loc:0,days:0,tok:0,out:0,cost:0});
+    msgs:a.msgs+(r.msgs||0),tok:a.tok+r.tok,out:a.out+r.out,cost:a.cost+r.cost}),
+    {secs:0,loc:0,days:0,msgs:0,tok:0,out:0,cost:0});
   $("span").textContent = rows.length ? (rows.length>1 ? rows[0].m+" – "+rows[rows.length-1].m : rows[0].m) : "no data";
   $("c_time").textContent = hm(t.secs);
   $("c_loc").textContent = ci(t.loc);
   $("c_cost").textContent = m0(t.cost);
   $("c_tok").textContent = ht(t.tok);
   $("c_tok_full").textContent = ci(t.tok);
+  $("c_msgs").textContent = ci(t.msgs);
   $("c_days").textContent = t.days;
   $("tbody").innerHTML = rows.map(r =>
     `<tr><td>${r.m}<div class="models">${r.models||""}</div></td>`+
-    `<td class="time">${hm(r.secs)}</td><td>${r.days}</td>`+
+    `<td class="time">${hm(r.secs)}</td><td>${r.days}</td><td>${ci(r.msgs||0)}</td>`+
     `<td class="loc">${ci(r.loc)}</td><td>${ci(r.out)}</td>`+
     `<td>${ci(r.tok)}</td><td class="cost">${m2(r.cost)}</td></tr>`).join("");
   $("tfoot").innerHTML =
-    `<tr><td>Total</td><td class="time">${hm(t.secs)}</td><td>${t.days}</td>`+
+    `<tr><td>Total</td><td class="time">${hm(t.secs)}</td><td>${t.days}</td><td>${ci(t.msgs)}</td>`+
     `<td class="loc">${ci(t.loc)}</td><td>${ci(t.out)}</td><td>${ci(t.tok)}</td>`+
     `<td class="cost">${m2(t.cost)}</td></tr>`;
   bars($("bars_time"), rows, "secs", hm, "time");
@@ -523,12 +578,14 @@ _WRAPPED_TEMPLATE = r"""<!DOCTYPE html>
   <div class="card">
     <div class="kicker">Claude Code · Wrapped</div>
     <div class="title">My Claude Code<br>recap</div>
-    <div class="span">%%SPAN%%</div>
+    <div class="span">%%SPAN%% · %%FAV%%</div>
     <div class="grid">
       <div class="stat"><div class="n">%%TIME%%</div><div class="l">Time together</div></div>
+      <div class="stat"><div class="n">%%MSGS%%</div><div class="l">Messages</div></div>
       <div class="stat"><div class="n">%%LOC%%</div><div class="l">Lines written</div></div>
       <div class="stat"><div class="n">%%TOK%%</div><div class="l">Tokens</div></div>
       <div class="stat"><div class="n">%%COST%%</div><div class="l">Value @ API rates</div></div>
+      <div class="stat"><div class="n">%%DAYS%%</div><div class="l">Active days</div></div>
     </div>
     <div class="chips">%%CHIPS%%</div>
     <div class="foot"><span>%%DAYS%% active days</span><span>%%REPO%%</span></div>
@@ -560,11 +617,11 @@ def main(argv=None):
     default_filter = args.default_filter.rstrip("m")
 
     if args.demo:
-        cc, loc, secs, days, extras = demo_data()
+        cc, loc, secs, days, extras, msgs, models = demo_data()
         months = sorted(cc)
     else:
         cc = ccusage_monthly()
-        events, loc, _newfiles = parse_logs(args.projects_dir)
+        events, loc, _newfiles, msgs, models = parse_logs(args.projects_dir)
         present = {dt.strftime("%Y-%m") for dt in events} | set(cc) | set(loc)
         if not present:
             print(f"No usage data found in {args.projects_dir}. "
@@ -578,6 +635,7 @@ def main(argv=None):
         "m": m,
         "secs": round(secs.get(m, 0)),
         "days": days.get(m, 0),
+        "msgs": msgs.get(m, 0),
         "loc": loc.get(m, 0),
         "out": cc.get(m, {}).get("outputTokens", 0),
         "tok": cc.get(m, {}).get("totalTokens", 0),
@@ -585,12 +643,15 @@ def main(argv=None):
         "models": short_models(cc.get(m, {}).get("modelsUsed")),
     } for m in months]
 
+    fav_name, fav_n = favorite_model(models)
     totals = {
         "secs": sum(r["secs"] for r in rows),
         "loc": sum(r["loc"] for r in rows),
         "days": sum(r["days"] for r in rows),
+        "msgs": sum(r["msgs"] for r in rows),
         "tokens": sum(r["tok"] for r in rows),
         "cost": sum(r["cost"] for r in rows),
+        "fav_model": fav_name, "fav_model_n": fav_n,
     }
     badges = compute_badges(extras, totals)
     gen = datetime.now().strftime("%d %b %Y %H:%M")
@@ -599,7 +660,8 @@ def main(argv=None):
     suffix = "-demo" if args.demo else ""
     outputs = []
 
-    html = build_html(rows, badges, default_filter, args.idle_cutoff, gen)
+    html = build_html(rows, badges, default_filter, args.idle_cutoff, gen,
+                      fav_name, fav_n)
     out = os.path.join(args.out_dir, f"usage-{months[-1]}{suffix}.html")
     with open(out, "w") as fh:
         fh.write(html)
