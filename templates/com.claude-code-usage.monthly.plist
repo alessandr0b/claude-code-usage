@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd job template for claude-code-usage.
+  install.sh substitutes the __PLACEHOLDER__ tokens and installs the result
+  into ~/Library/LaunchAgents/. Do not edit the installed copy by hand;
+  re-run install.sh instead.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.claude-code-usage.monthly</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PYTHON__</string>
+        <string>__SCRIPT__</string>
+        <string>--out-dir</string>
+        <string>__OUTDIR__</string>
+    </array>
+
+    <!-- launchd starts with a minimal PATH; include Node so `npx ccusage` resolves. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__PATH__</string>
+    </dict>
+
+    <!-- 1st of every month at 09:00 local time. -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Day</key>
+        <integer>1</integer>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>__OUTDIR__/.launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>__OUTDIR__/.launchd.log</string>
+</dict>
+</plist>

@@ -1,0 +1,18 @@
+# Generated reports (default output dir, if someone points it inside the repo)
+claude-code-usage-reports/
+usage-*.html
+!examples/sample-report.html
+
+# Scheduler logs
+.launchd.log
+.cron.log
+
+# Python
+__pycache__/
+*.pyc
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
