@@ -12,18 +12,21 @@ Thanks for your interest! This is a small, dependency-free project and aims to s
 
 ```bash
 # Fast iteration with synthetic data — no logs required:
-python3 claude_usage_report.py --demo --open
+python3 claude_usage_report.py --demo --wrapped --open
 
 # Against your own logs:
-python3 claude_usage_report.py --open
+python3 claude_usage_report.py --wrapped --open
 ```
 
-There are no build steps. If you change the HTML template, regenerate the sample:
+There are no build steps. If you change the HTML template, regenerate the committed samples:
 
 ```bash
-python3 claude_usage_report.py --demo --out-dir examples
-mv examples/usage-*-demo.html examples/sample-report.html
+python3 claude_usage_report.py --demo --wrapped --default-filter all --out-dir examples
+mv examples/usage-*-demo.html    examples/sample-report.html
+mv examples/wrapped-*-demo.html  examples/sample-wrapped.html
 ```
+
+The samples must always come from `--demo` (synthetic data) — never commit real usage.
 
 ## Ideas / good first issues
 
@@ -31,7 +34,7 @@ mv examples/usage-*-demo.html examples/sample-report.html
 - Weekly or daily granularity (`--granularity`)
 - CSV / JSON export alongside the HTML
 - Light theme toggle
-- A "longest streak" / "most active day" stat
+- More achievements / a "most active day" stat
 
 ## Submitting
 

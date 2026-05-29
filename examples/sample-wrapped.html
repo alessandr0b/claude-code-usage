@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code Wrapped</title>
+<style>
+  * { box-sizing:border-box; margin:0; }
+  body { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:24px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:#0b0d12; }
+  .card { width:540px; height:540px; border-radius:28px; padding:38px 40px; color:#fff;
+    background:radial-gradient(120% 120% at 0% 0%, #d97757 0%, #b5485f 38%, #6a3d8f 72%, #2c2f6b 100%);
+    box-shadow:0 30px 80px rgba(0,0,0,.5); display:flex; flex-direction:column; position:relative; overflow:hidden; }
+  .card::after { content:""; position:absolute; inset:0; background:radial-gradient(60% 50% at 90% 10%, rgba(255,255,255,.18), transparent 60%); pointer-events:none; }
+  .kicker { font-size:13px; letter-spacing:3px; text-transform:uppercase; opacity:.85; }
+  .title { font-size:40px; font-weight:800; letter-spacing:-1px; margin-top:4px; line-height:1.05; }
+  .span { font-size:15px; opacity:.85; margin-top:6px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px 22px; margin-top:28px; }
+  .stat .n { font-size:34px; font-weight:800; letter-spacing:-1px; }
+  .stat .l { font-size:12.5px; letter-spacing:1px; text-transform:uppercase; opacity:.8; margin-top:2px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:auto; }
+  .wb { display:flex; align-items:center; gap:6px; background:rgba(255,255,255,.16);
+    border:1px solid rgba(255,255,255,.25); padding:7px 12px; border-radius:999px; font-size:13px; font-weight:600; }
+  .wb span { font-size:15px; }
+  .foot { margin-top:18px; font-size:12px; opacity:.8; display:flex; justify-content:space-between; }
+</style></head><body>
+  <div class="card">
+    <div class="kicker">Claude Code · Wrapped</div>
+    <div class="title">My Claude Code<br>recap</div>
+    <div class="span">2025-07 – 2025-12</div>
+    <div class="grid">
+      <div class="stat"><div class="n">158h 0m</div><div class="l">Time together</div></div>
+      <div class="stat"><div class="n">173,100</div><div class="l">Lines written</div></div>
+      <div class="stat"><div class="n">1.49 B</div><div class="l">Tokens</div></div>
+      <div class="stat"><div class="n">$1,218</div><div class="l">Value @ API rates</div></div>
+    </div>
+    <div class="chips"><div class="wb"><span>🔥</span>On Fire</div><div class="wb"><span>🏃</span>Marathoner</div><div class="wb"><span>🌙</span>Night Owl</div></div>
+    <div class="foot"><span>84 active days</span><span>github.com/alessandr0b/claude-code-usage</span></div>
+  </div>
+</body></html>

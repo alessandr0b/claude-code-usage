@@ -3,19 +3,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Claude Code — Usage Report</title>
 <style>
-  :root { --bg:#0f1115; --card:#181b22; --card2:#1f232c; --line:#2a2f3a; --txt:#e7e9ee; --muted:#9aa3b2; --accent:#d97757; --accent2:#6ea8fe; --loc:#c08cf0; }
+  :root { --bg:#0f1115; --card:#181b22; --card2:#1f232c; --line:#2a2f3a; --txt:#e7e9ee; --muted:#9aa3b2; --accent:#d97757; --accent2:#6ea8fe; --loc:#c08cf0; --gold:#e6b450; }
   * { box-sizing:border-box; }
   body { margin:0; padding:40px 20px; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:radial-gradient(1200px 600px at 50% -200px,#1a1f2b,var(--bg)); color:var(--txt); line-height:1.5; }
   .wrap { max-width:980px; margin:0 auto; }
   h1 { font-size:28px; margin:0 0 4px; letter-spacing:-.5px; }
-  .sub { color:var(--muted); font-size:14px; margin-bottom:28px; }
+  .sub { color:var(--muted); font-size:14px; margin-bottom:24px; }
+  .filters { display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
+  .chip { cursor:pointer; border:1px solid var(--line); background:var(--card); color:var(--muted); padding:7px 16px; border-radius:999px; font-size:13px; font-weight:600; user-select:none; }
+  .chip:hover { border-color:#3a4150; color:var(--txt); }
+  .chip.active { background:var(--accent); border-color:var(--accent); color:#fff; }
   .cards { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:28px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
   .card .label { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.6px; }
   .card .val { font-size:22px; font-weight:650; margin-top:6px; letter-spacing:-.5px; }
   .card .val.cost { color:var(--accent); } .card .val.time { color:var(--accent2); } .card .val.loc { color:var(--loc); }
   .card .hint { color:var(--muted); font-size:12px; margin-top:4px; }
-  .section-title { font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin:8px 0 12px; }
+  .section-title { font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin:8px 0 12px; display:flex; justify-content:space-between; }
+  .section-title .count { color:var(--gold); }
+  .badges { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:10px; margin-bottom:28px; }
+  .badge { display:flex; align-items:center; gap:11px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:11px 13px; }
+  .badge .ico { font-size:24px; line-height:1; }
+  .badge .bname { font-weight:650; font-size:14px; }
+  .badge .bdesc { color:var(--muted); font-size:11.5px; }
+  .badge:not(.locked) { border-color:#3a3320; background:linear-gradient(180deg,#241f12,var(--card)); }
+  .badge:not(.locked) .bname { color:var(--gold); }
+  .badge.locked { opacity:.45; filter:grayscale(.7); }
   table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
   th,td { padding:12px 14px; text-align:right; font-variant-numeric:tabular-nums; }
   th { background:var(--card2); color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.5px; font-weight:600; }
@@ -26,9 +39,9 @@
   .models { color:var(--muted); font-size:11px; }
   .panels { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:28px; }
   .panel { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; }
-  .bar-row { display:grid; grid-template-columns:42px 1fr 86px; align-items:center; gap:10px; margin:9px 0; }
+  .bar-row { display:grid; grid-template-columns:48px 1fr 86px; align-items:center; gap:10px; margin:9px 0; }
   .bar-track { background:#11141a; border-radius:8px; height:20px; overflow:hidden; }
-  .bar-fill { height:100%; border-radius:8px; }
+  .bar-fill { height:100%; border-radius:8px; transition:width .3s ease; }
   .bar-fill.cost { background:linear-gradient(90deg,var(--accent),#e8a07f); }
   .bar-fill.time { background:linear-gradient(90deg,var(--accent2),#a7c6ff); }
   .bar-fill.loc { background:linear-gradient(90deg,var(--loc),#dcbcf7); }
@@ -37,26 +50,104 @@
   .bar-month { color:var(--muted); font-size:13px; }
   .note { color:var(--muted); font-size:12px; margin-top:18px; }
   .footer { color:var(--muted); font-size:12px; margin-top:18px; text-align:center; }
+  .footer a { color:var(--accent2); }
   @media (max-width:760px){ .cards{grid-template-columns:repeat(2,1fr);} .panels{grid-template-columns:1fr;} }
 </style></head><body><div class="wrap">
   <h1>Claude Code — Usage Report</h1>
-  <div class="sub">2025-10 – 2025-12 · generated 29 May 2026 10:38 · all figures derived locally · dollar amounts are public API-rate estimates</div>
+  <div class="sub"><span id="span"></span> · generated 29 May 2026 10:53 · all figures derived locally · dollar amounts are public API-rate estimates</div>
+
+  <div class="filters" id="filters">
+    <div class="chip" data-f="3">3M</div>
+    <div class="chip" data-f="6">6M</div>
+    <div class="chip" data-f="12">12M</div>
+    <div class="chip" data-f="all">All</div>
+  </div>
+
   <div class="cards">
-    <div class="card"><div class="label">Time together</div><div class="val time">101h 0m</div><div class="hint">hands-on</div></div>
-    <div class="card"><div class="label">Lines written</div><div class="val loc">127,400</div><div class="hint">code we wrote</div></div>
-    <div class="card"><div class="label">Est. value</div><div class="val cost">$996</div><div class="hint">at API rates</div></div>
-    <div class="card"><div class="label">Total tokens</div><div class="val">1.23 B</div><div class="hint">1,226,500,000</div></div>
-    <div class="card"><div class="label">Active days</div><div class="val">50</div><div class="hint">days with activity</div></div>
+    <div class="card"><div class="label">Time together</div><div class="val time" id="c_time"></div><div class="hint">hands-on</div></div>
+    <div class="card"><div class="label">Lines written</div><div class="val loc" id="c_loc"></div><div class="hint">code we wrote</div></div>
+    <div class="card"><div class="label">Est. value</div><div class="val cost" id="c_cost"></div><div class="hint">at API rates</div></div>
+    <div class="card"><div class="label">Total tokens</div><div class="val" id="c_tok"></div><div class="hint" id="c_tok_full"></div></div>
+    <div class="card"><div class="label">Active days</div><div class="val" id="c_days"></div><div class="hint">days with activity</div></div>
   </div>
-  <div class="section-title">Monthly breakdown</div>
+
+  <div class="section-title"><span>Achievements (all-time)</span><span class="count">8 of 9 unlocked</span></div>
+  <div class="badges"><div class="badge"><div class="ico">🔥</div><div class="bmeta"><div class="bname">On Fire</div><div class="bdesc">9-day streak</div></div></div><div class="badge"><div class="ico">🏃</div><div class="bmeta"><div class="bname">Marathoner</div><div class="bdesc">4h 12m in one sitting</div></div></div><div class="badge"><div class="ico">🌙</div><div class="bmeta"><div class="bname">Night Owl</div><div class="bdesc">18% after midnight</div></div></div><div class="badge"><div class="ico">🗓️</div><div class="bmeta"><div class="bname">Weekend Warrior</div><div class="bdesc">30% on weekends</div></div></div><div class="badge"><div class="ico">📅</div><div class="bmeta"><div class="bname">Regular</div><div class="bdesc">84 active days</div></div></div><div class="badge"><div class="ico">⌨️</div><div class="bmeta"><div class="bname">Prolific</div><div class="bdesc">173,100 lines</div></div></div><div class="badge"><div class="ico">💎</div><div class="bmeta"><div class="bname">Heavy Lifter</div><div class="bdesc">$1,218 of value</div></div></div><div class="badge"><div class="ico">🧠</div><div class="bmeta"><div class="bname">Token Titan</div><div class="bdesc">1.49 B tokens</div></div></div><div class="badge locked"><div class="ico">🐦</div><div class="bmeta"><div class="bname">Early Bird</div><div class="bdesc">12%+ time 05–08h</div></div></div></div>
+
+  <div class="section-title"><span>Monthly breakdown</span></div>
   <table><thead><tr><th>Month</th><th>Time</th><th>Days</th><th>Lines</th><th>Output</th><th>Total tokens</th><th>Est. value</th></tr></thead>
-  <tbody><tr><td>2025-10<div class="models">haiku 4-5, sonnet 4-6</div></td><td class="time">22h 0m</td><td>12</td><td class="loc">18,400</td><td>1,240,000</td><td>96,500,000</td><td class="cost">$78.40</td></tr><tr><td>2025-11<div class="models">haiku 4-5, opus 4-6, sonnet 4-6</div></td><td class="time">31h 0m</td><td>17</td><td class="loc">41,200</td><td>3,820,000</td><td>412,000,000</td><td class="cost">$305.10</td></tr><tr><td>2025-12<div class="models">haiku 4-5, opus 4-7</div></td><td class="time">48h 0m</td><td>21</td><td class="loc">67,800</td><td>6,150,000</td><td>718,000,000</td><td class="cost">$612.75</td></tr></tbody>
-  <tfoot><tr><td>Total</td><td class="time">101h 0m</td><td>50</td><td class="loc">127,400</td><td>11,210,000</td><td>1,226,500,000</td><td class="cost">$996.25</td></tr></tfoot></table>
+  <tbody id="tbody"></tbody>
+  <tfoot id="tfoot"></tfoot></table>
+
   <div class="panels">
-    <div class="panel"><div class="section-title" style="margin-top:0">Time (hrs)</div><div class="bar-row"><div class="bar-month">10</div><div class="bar-track"><div class="bar-fill time" style="width:45.8%"></div></div><div class="bar-val time">22h 0m</div></div><div class="bar-row"><div class="bar-month">11</div><div class="bar-track"><div class="bar-fill time" style="width:64.6%"></div></div><div class="bar-val time">31h 0m</div></div><div class="bar-row"><div class="bar-month">12</div><div class="bar-track"><div class="bar-fill time" style="width:100.0%"></div></div><div class="bar-val time">48h 0m</div></div></div>
-    <div class="panel"><div class="section-title" style="margin-top:0">Lines written</div><div class="bar-row"><div class="bar-month">10</div><div class="bar-track"><div class="bar-fill loc" style="width:27.1%"></div></div><div class="bar-val loc">18,400</div></div><div class="bar-row"><div class="bar-month">11</div><div class="bar-track"><div class="bar-fill loc" style="width:60.8%"></div></div><div class="bar-val loc">41,200</div></div><div class="bar-row"><div class="bar-month">12</div><div class="bar-track"><div class="bar-fill loc" style="width:100.0%"></div></div><div class="bar-val loc">67,800</div></div></div>
-    <div class="panel"><div class="section-title" style="margin-top:0">Est. value (USD)</div><div class="bar-row"><div class="bar-month">10</div><div class="bar-track"><div class="bar-fill cost" style="width:12.8%"></div></div><div class="bar-val cost">$78</div></div><div class="bar-row"><div class="bar-month">11</div><div class="bar-track"><div class="bar-fill cost" style="width:49.8%"></div></div><div class="bar-val cost">$305</div></div><div class="bar-row"><div class="bar-month">12</div><div class="bar-track"><div class="bar-fill cost" style="width:100.0%"></div></div><div class="bar-val cost">$613</div></div></div>
+    <div class="panel"><div class="section-title" style="margin-top:0"><span>Time (hrs)</span></div><div id="bars_time"></div></div>
+    <div class="panel"><div class="section-title" style="margin-top:0"><span>Lines written</span></div><div id="bars_loc"></div></div>
+    <div class="panel"><div class="section-title" style="margin-top:0"><span>Est. value (USD)</span></div><div id="bars_cost"></div></div>
   </div>
-  <div class="note"><strong>Time together</strong> = sum of gaps ≤ 30 min between consecutive log events (longer gaps are treated as time away); a fair lower bound on engaged time. <strong>Lines written</strong> counts content emitted via Write/Edit tools across all projects — a proxy, not a net git diff. On a Pro/Max subscription the dollar figure is API-equivalent value, not money billed.</div>
-  <div class="footer">Generated by <a href="https://github.com/alessandr0b/claude-code-usage" style="color:var(--accent2)">claude-code-usage</a> · tokens &amp; cost via <code>ccusage</code> · time &amp; lines from <code>~/.claude/projects</code></div>
-</div></body></html>
+
+  <div class="note"><strong>Time together</strong> = sum of gaps ≤ 30 min between consecutive log events (longer gaps are treated as time away); a fair lower bound on engaged time. <strong>Lines written</strong> counts content emitted via Write/Edit tools across all projects — a proxy, not a net git diff. <strong>"All"</strong> is limited by Claude Code's log retention, so older months may be missing. On a Pro/Max subscription the dollar figure is API-equivalent value, not money billed.</div>
+  <div class="footer">Generated by <a href="https://github.com/alessandr0b/claude-code-usage">claude-code-usage</a> · tokens &amp; cost via <code>ccusage</code> · time &amp; lines from <code>~/.claude/projects</code></div>
+</div>
+<script>
+const DATA = [{"m":"2025-07","secs":50400,"days":9,"loc":9600,"out":720000,"tok":51000000,"cost":41.2,"models":"haiku 4-5, sonnet 4-6"},{"m":"2025-08","secs":64800,"days":11,"loc":14300,"out":980000,"tok":73000000,"cost":58.9,"models":"haiku 4-5, sonnet 4-6"},{"m":"2025-09","secs":90000,"days":14,"loc":21800,"out":1510000,"tok":142000000,"cost":121.4,"models":"opus 4-6, sonnet 4-6"},{"m":"2025-10","secs":79200,"days":12,"loc":18400,"out":1240000,"tok":96500000,"cost":78.4,"models":"haiku 4-5, sonnet 4-6"},{"m":"2025-11","secs":111600,"days":17,"loc":41200,"out":3820000,"tok":412000000,"cost":305.1,"models":"haiku 4-5, opus 4-6, sonnet 4-6"},{"m":"2025-12","secs":172800,"days":21,"loc":67800,"out":6150000,"tok":718000000,"cost":612.75,"models":"haiku 4-5, opus 4-7"}];            // [{m,secs,days,loc,out,tok,cost,models}] ascending
+let FILTER = "all";
+const $ = id => document.getElementById(id);
+
+const hm = s => { s=Math.round(s); return Math.floor(s/3600)+"h "+Math.floor((s%3600)/60)+"m"; };
+const ht = n => n>=1e9?(n/1e9).toFixed(2)+" B":n>=1e6?(n/1e6).toFixed(2)+" M":n>=1e3?(n/1e3).toFixed(1)+" K":""+n;
+const ci = n => n.toLocaleString("en-US");
+const m0 = n => "$"+Math.round(n).toLocaleString("en-US");
+const m2 = n => "$"+n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+function calWindow(latest, n) {
+  let [y,mo] = latest.split("-").map(Number), s = new Set();
+  for (let i=0;i<n;i++){ s.add(y+"-"+String(mo).padStart(2,"0")); if(--mo===0){mo=12;y--;} }
+  return s;
+}
+function subset() {
+  if (FILTER==="all" || !DATA.length) return DATA;
+  const win = calWindow(DATA[DATA.length-1].m, parseInt(FILTER,10));
+  return DATA.filter(d => win.has(d.m));
+}
+function bars(host, rows, key, fmt, cls) {
+  const max = Math.max(1, ...rows.map(r => r[key]));
+  host.innerHTML = rows.map(r =>
+    `<div class="bar-row"><div class="bar-month">${r.m.slice(5)}</div>`+
+    `<div class="bar-track"><div class="bar-fill ${cls}" style="width:${(r[key]/max*100).toFixed(1)}%"></div></div>`+
+    `<div class="bar-val ${cls}">${fmt(r[key])}</div></div>`).join("");
+}
+function render() {
+  const rows = subset();
+  const t = rows.reduce((a,r)=>({secs:a.secs+r.secs,loc:a.loc+r.loc,days:a.days+r.days,
+    tok:a.tok+r.tok,out:a.out+r.out,cost:a.cost+r.cost}),{secs:0,loc:0,days:0,tok:0,out:0,cost:0});
+  $("span").textContent = rows.length ? (rows.length>1 ? rows[0].m+" – "+rows[rows.length-1].m : rows[0].m) : "no data";
+  $("c_time").textContent = hm(t.secs);
+  $("c_loc").textContent = ci(t.loc);
+  $("c_cost").textContent = m0(t.cost);
+  $("c_tok").textContent = ht(t.tok);
+  $("c_tok_full").textContent = ci(t.tok);
+  $("c_days").textContent = t.days;
+  $("tbody").innerHTML = rows.map(r =>
+    `<tr><td>${r.m}<div class="models">${r.models||""}</div></td>`+
+    `<td class="time">${hm(r.secs)}</td><td>${r.days}</td>`+
+    `<td class="loc">${ci(r.loc)}</td><td>${ci(r.out)}</td>`+
+    `<td>${ci(r.tok)}</td><td class="cost">${m2(r.cost)}</td></tr>`).join("");
+  $("tfoot").innerHTML =
+    `<tr><td>Total</td><td class="time">${hm(t.secs)}</td><td>${t.days}</td>`+
+    `<td class="loc">${ci(t.loc)}</td><td>${ci(t.out)}</td><td>${ci(t.tok)}</td>`+
+    `<td class="cost">${m2(t.cost)}</td></tr>`;
+  bars($("bars_time"), rows, "secs", hm, "time");
+  bars($("bars_loc"),  rows, "loc",  ci, "loc");
+  bars($("bars_cost"), rows, "cost", m0, "cost");
+}
+function setFilter(f) {
+  FILTER = f;
+  document.querySelectorAll(".chip").forEach(c => c.classList.toggle("active", c.dataset.f===f));
+  render();
+}
+document.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => setFilter(c.dataset.f)));
+// Fall back to "all" if the default filter would show nothing.
+if (FILTER!=="all" && !subset().length) FILTER="all";
+setFilter(FILTER);
+</script>
+</body></html>

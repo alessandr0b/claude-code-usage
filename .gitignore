@@ -1,7 +1,9 @@
 # Generated reports (default output dir, if someone points it inside the repo)
 claude-code-usage-reports/
 usage-*.html
+wrapped-*.html
 !examples/sample-report.html
+!examples/sample-wrapped.html
 
 # Scheduler logs
 .launchd.log

@@ -15,6 +15,7 @@
     <array>
         <string>__PYTHON__</string>
         <string>__SCRIPT__</string>
+        <string>--wrapped</string>
         <string>--out-dir</string>
         <string>__OUTDIR__</string>
     </array>

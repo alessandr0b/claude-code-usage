@@ -59,7 +59,7 @@ case "$(uname -s)" in
     ;;
 
   Linux)
-    CRON_LINE="0 9 1 * * \"$PYTHON\" \"$SCRIPT\" --out-dir \"$OUTDIR\" >> \"$OUTDIR/.cron.log\" 2>&1"
+    CRON_LINE="0 9 1 * * \"$PYTHON\" \"$SCRIPT\" --wrapped --out-dir \"$OUTDIR\" >> \"$OUTDIR/.cron.log\" 2>&1"
     # Replace any existing entry for this script, keep everything else.
     TMP="$(mktemp)"
     crontab -l 2>/dev/null | grep -vF "$SCRIPT" > "$TMP" || true
